@@ -2,72 +2,96 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Smart QR Attendance</title>
 
 <style>
-  body {
+* {
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
     margin: 0;
-    font-family: Arial, sans-serif;
-    background: #f2f4f7;
-  }
+    min-height: 100vh;
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e5e7eb;
+}
 
-  .app {
-    max-width: 420px;
-    margin: 40px auto;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    padding: 20px;
-  }
-
-  h2 {
-    text-align: center;
-  }
-
-  input, button {
+.app {
     width: 100%;
-    padding: 12px;
-    margin-top: 12px;
-    font-size: 16px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-  }
+    max-width: 420px;
+    min-height: 90vh;
+    background: #020617;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
 
-  button {
+/* Headings */
+h2 {
+    text-align: center;
+    font-size: 1.8rem;
+    margin-bottom: 24px;
+}
+
+/* Inputs */
+input {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.05rem;
+    border-radius: 10px;
+    border: none;
+    margin-bottom: 16px;
+    background: #1e293b;
+    color: #e5e7eb;
+}
+
+input::placeholder {
+    color: #94a3b8;
+}
+
+/* Buttons */
+button {
+    width: 100%;
+    padding: 18px;
+    font-size: 1.2rem;
+    border-radius: 12px;
     border: none;
     cursor: pointer;
-  }
+    margin-top: 10px;
+}
 
-  .primary {
+.primary {
     background: #2563eb;
     color: white;
-  }
+}
 
-  .danger {
-    background: #dc2626;
+.secondary {
+    background: #475569;
     color: white;
-  }
+}
 
-  .disabled {
-    background: #9ca3af;
+button:disabled {
+    opacity: 0.5;
     cursor: not-allowed;
-  }
+}
 
-  .hidden {
-    display: none;
-  }
-
-  .status {
-    margin-top: 12px;
-    font-weight: bold;
+/* Info text */
+.status {
+    margin-top: 16px;
     text-align: center;
-  }
+    font-size: 0.95rem;
+    color: #cbd5f5;
+}
 
-  video {
-    width: 100%;
-    border-radius: 10px;
-    margin-top: 15px;
-  }
+.hidden {
+    display: none;
+}
 </style>
 </head>
 
@@ -75,154 +99,120 @@
 
 <div class="app">
 
-  <!-- LOGIN SCREEN -->
-  <div id="login">
-    <h2>Student Login</h2>
-    <input id="username" placeholder="Enter your name">
-    <button class="primary" onclick="login()">Login</button>
-  </div>
+    <!-- LOGIN -->
+    <div id="loginScreen">
+        <h2>Student Login</h2>
+        <input id="nameInput" placeholder="Enter your name">
+        <input id="rollInput" placeholder="Enter roll number">
+        <button class="primary" onclick="login()">Login</button>
+    </div>
 
-  <!-- HOME SCREEN -->
-  <div id="home" class="hidden">
-    <h2 id="welcome"></h2>
-    <button class="primary" onclick="startScan()">Scan QR</button>
-    <button id="logoutBtn" class="danger" onclick="logout()">Logout</button>
-    <div class="status" id="status"></div>
-  </div>
+    <!-- MAIN -->
+    <div id="mainScreen" class="hidden">
+        <h2 id="welcomeText"></h2>
 
-  <!-- CAMERA -->
-  <video id="camera" class="hidden"></video>
+        <button class="primary" onclick="scanQR()">Scan QR</button>
+
+        <button id="logoutBtn" class="secondary" onclick="logout()" disabled>
+            Logout
+        </button>
+
+        <div class="status" id="statusText">
+            Logout locked to prevent proxy attendance
+        </div>
+    </div>
 
 </div>
 
-<script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
 <script>
 const API = "https://smart-qr-attendance-backend.onrender.com";
 
-let stream = null;
-let cooldownUntil = 0;
+let user = JSON.parse(localStorage.getItem("user"));
+let logoutCooldown = 0;
+let timer = null;
 
-// -------------------- INIT --------------------
-window.onload = () => {
-  const user = localStorage.getItem("username");
-  if (user) showHome(user);
-};
+/* Initial */
+if (user) showMain();
+else showLogin();
 
-// -------------------- LOGIN --------------------
+function showLogin() {
+    loginScreen.classList.remove("hidden");
+    mainScreen.classList.add("hidden");
+}
+
+function showMain() {
+    loginScreen.classList.add("hidden");
+    mainScreen.classList.remove("hidden");
+    welcomeText.innerText = `Hello, ${user.name}`;
+}
+
+/* Login */
 function login() {
-  const name = document.getElementById("username").value.trim();
-  if (!name) return alert("Enter your name");
-  localStorage.setItem("username", name);
-  showHome(name);
-}
+    const name = nameInput.value.trim();
+    const roll = rollInput.value.trim();
 
-function showHome(name) {
-  document.getElementById("login").classList.add("hidden");
-  document.getElementById("home").classList.remove("hidden");
-  document.getElementById("welcome").innerText = `Hello, ${name}`;
-  checkLogoutState();
-}
-
-// -------------------- LOGOUT --------------------
-function logout() {
-  if (Date.now() < cooldownUntil) {
-    alert("Logout is temporarily disabled to prevent proxy attendance.");
-    return;
-  }
-  if (!confirm("Are you sure you want to logout?")) return;
-  localStorage.clear();
-  location.reload();
-}
-
-function checkLogoutState() {
-  const btn = document.getElementById("logoutBtn");
-  const status = document.getElementById("status");
-
-  const interval = setInterval(() => {
-    const remaining = Math.floor((cooldownUntil - Date.now()) / 1000);
-    if (remaining > 0) {
-      btn.classList.add("disabled");
-      btn.innerText = `Logout (${remaining}s)`;
-      status.innerText = "Logout locked to prevent proxy attendance";
-    } else {
-      btn.classList.remove("disabled");
-      btn.innerText = "Logout";
-      status.innerText = "";
-      clearInterval(interval);
+    if (!name || !roll) {
+        alert("Enter name and roll number");
+        return;
     }
-  }, 1000);
+
+    user = { name, roll };
+    localStorage.setItem("user", JSON.stringify(user));
+    showMain();
 }
 
-// -------------------- SCAN QR --------------------
-async function startScan() {
-  const video = document.getElementById("camera");
-  video.classList.remove("hidden");
-
-  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-  video.srcObject = stream;
-  video.setAttribute("playsinline", true);
-  video.play();
-
-  scanLoop(video);
-}
-
-function scanLoop(video) {
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-
-  const loop = setInterval(async () => {
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-    if (code) {
-      clearInterval(loop);
-      stopCamera();
-      handleQR(code.data);
+/* Scan QR */
+function scanQR() {
+    const token = new URLSearchParams(window.location.search).get("token");
+    if (!token) {
+        alert("Scan the QR shown by your teacher");
+        return;
     }
-  }, 500);
-}
 
-function stopCamera() {
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  document.getElementById("camera").classList.add("hidden");
-}
-
-// -------------------- HANDLE QR --------------------
-async function handleQR(data) {
-  try {
-    const url = new URL(data);
-    const token = url.searchParams.get("token");
-    if (!token) throw "Invalid QR";
-
-    const res = await fetch(API + "/mark_attendance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: localStorage.getItem("username"),
-        token
-      })
+    fetch(`${API}/mark_attendance`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            name: `${user.name}: ${user.roll}`,
+            token
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+        startCooldown(data.cooldown);
+        alert("Attendance marked");
     });
+}
 
-    const json = await res.json();
+/* Logout cooldown */
+function startCooldown(seconds) {
+    logoutCooldown = seconds;
+    logoutBtn.disabled = true;
 
-    if (json.status === "marked") {
-      document.getElementById("status").innerText = "Attendance marked ✔";
-      cooldownUntil = Date.now() + json.cooldown * 1000;
-      checkLogoutState();
-    } else {
-      document.getElementById("status").innerText =
-        json.error || "Error occurred";
-    }
-  } catch {
-    document.getElementById("status").innerText =
-      "QR expired. Contact your teacher.";
-  }
+    timer = setInterval(() => {
+        logoutBtn.innerText = `Logout (${logoutCooldown}s)`;
+        logoutCooldown--;
+
+        if (logoutCooldown < 0) {
+            clearInterval(timer);
+            logoutBtn.innerText = "Logout";
+            logoutBtn.disabled = false;
+            statusText.innerText = "You can logout now";
+        }
+    }, 1000);
+}
+
+/* Logout */
+function logout() {
+    if (logoutCooldown > 0) return;
+    if (!confirm("Logout?")) return;
+
+    localStorage.removeItem("user");
+    location.href = "/student";
 }
 </script>
 
