@@ -32,14 +32,12 @@ body {
     justify-content: center;
 }
 
-/* Headings */
 h2 {
     text-align: center;
     font-size: 1.8rem;
     margin-bottom: 24px;
 }
 
-/* Inputs */
 input {
     width: 100%;
     padding: 16px;
@@ -55,7 +53,6 @@ input::placeholder {
     color: #94a3b8;
 }
 
-/* Buttons */
 button {
     width: 100%;
     padding: 18px;
@@ -81,7 +78,6 @@ button:disabled {
     cursor: not-allowed;
 }
 
-/* Info text */
 .status {
     margin-top: 16px;
     text-align: center;
@@ -113,13 +109,11 @@ button:disabled {
 
         <button class="primary" onclick="scanQR()">Scan QR</button>
 
-        <button id="logoutBtn" class="secondary" onclick="logout()" disabled>
+        <button id="logoutBtn" class="secondary" onclick="logout()">
             Logout
         </button>
 
-        <div class="status" id="statusText">
-            Logout locked to prevent proxy attendance
-        </div>
+        <div class="status" id="statusText"></div>
     </div>
 
 </div>
@@ -128,10 +122,10 @@ button:disabled {
 const API = "https://smart-qr-attendance-backend.onrender.com";
 
 let user = JSON.parse(localStorage.getItem("user"));
-let logoutCooldown = 0;
+let cooldownEnd = localStorage.getItem("cooldownEnd");
 let timer = null;
 
-/* Initial */
+/* INIT */
 if (user) showMain();
 else showLogin();
 
@@ -144,9 +138,10 @@ function showMain() {
     loginScreen.classList.add("hidden");
     mainScreen.classList.remove("hidden");
     welcomeText.innerText = `Hello, ${user.name}`;
+    checkCooldown();
 }
 
-/* Login */
+/* LOGIN */
 function login() {
     const name = nameInput.value.trim();
     const roll = rollInput.value.trim();
@@ -161,11 +156,11 @@ function login() {
     showMain();
 }
 
-/* Scan QR */
+/* SCAN QR */
 function scanQR() {
     const token = new URLSearchParams(window.location.search).get("token");
     if (!token) {
-        alert("Scan the QR shown by your teacher");
+        alert("Scan the QR using your phone camera");
         return;
     }
 
@@ -183,35 +178,59 @@ function scanQR() {
             alert(data.error);
             return;
         }
+
         startCooldown(data.cooldown);
-        alert("Attendance marked");
+        alert("Attendance marked successfully");
     });
 }
 
-/* Logout cooldown */
+/* COOLDOWN LOGIC */
 function startCooldown(seconds) {
-    logoutCooldown = seconds;
-    logoutBtn.disabled = true;
+    cooldownEnd = Date.now() + seconds * 1000;
+    localStorage.setItem("cooldownEnd", cooldownEnd);
+    checkCooldown();
+}
+
+function checkCooldown() {
+    clearInterval(timer);
+
+    const btn = logoutBtn;
+    const text = statusText;
+
+    if (!cooldownEnd || Date.now() > cooldownEnd) {
+        btn.disabled = false;
+        btn.innerText = "Logout";
+        text.innerText = "";
+        localStorage.removeItem("cooldownEnd");
+        return;
+    }
+
+    btn.disabled = true;
 
     timer = setInterval(() => {
-        logoutBtn.innerText = `Logout (${logoutCooldown}s)`;
-        logoutCooldown--;
+        const remaining = Math.ceil((cooldownEnd - Date.now()) / 1000);
 
-        if (logoutCooldown < 0) {
+        if (remaining <= 0) {
             clearInterval(timer);
-            logoutBtn.innerText = "Logout";
-            logoutBtn.disabled = false;
-            statusText.innerText = "You can logout now";
+            btn.disabled = false;
+            btn.innerText = "Logout";
+            text.innerText = "You can logout now";
+            localStorage.removeItem("cooldownEnd");
+        } else {
+            btn.innerText = `Logout (${remaining}s)`;
+            text.innerText = "Logout locked to prevent proxy attendance";
         }
     }, 1000);
 }
 
-/* Logout */
+/* LOGOUT */
 function logout() {
-    if (logoutCooldown > 0) return;
+    if (logoutBtn.disabled) return;
+
     if (!confirm("Logout?")) return;
 
     localStorage.removeItem("user");
+    localStorage.removeItem("cooldownEnd");
     location.href = "/student";
 }
 </script>
