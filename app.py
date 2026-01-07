@@ -44,7 +44,7 @@ def generate_qr():
     attendance.clear()
 
     # IMPORTANT: student URL (placeholder for now)
-    student_url = f"https://RENDER_URL/student?token={token}"
+    student_url = f"https://smart-qr-attendance-backend.onrender.com/student?token={token}"
 
     img = qrcode.make(student_url)
     buf = io.BytesIO()
@@ -96,10 +96,19 @@ def qr_status():
         "duration": current_qr["duration"]
     })
 
+@app.route("/")
+def root():
+    return "Smart QR Attendance Backend Running"
 
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
+
+@app.route("/student")
+def serve_student():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    student_dir = os.path.join(base_dir, "..", "student")
+    return send_from_directory(student_dir, "index.html")
 
 
 # ======================
@@ -108,10 +117,5 @@ def health():
 if __name__ == "__main__":
     app.run(debug=True)
 
-@app.route("/student")
-def serve_student():
-    return send_from_directory(
-        os.path.join(os.getcwd(), "student"),
-        "index.html"
-    )
+
 
