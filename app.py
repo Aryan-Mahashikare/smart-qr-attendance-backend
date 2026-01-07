@@ -1,3 +1,5 @@
+from flask import send_from_directory
+import os
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import time, uuid, io
@@ -42,8 +44,7 @@ def generate_qr():
     attendance.clear()
 
     # IMPORTANT: student URL (placeholder for now)
-    student_url = f"https://smart-qr-attendance-backend.onrender.com/student?token={token}"
-
+    student_url = f"https://RENDER_URL/student?token={token}"
 
     img = qrcode.make(student_url)
     buf = io.BytesIO()
@@ -106,3 +107,11 @@ def health():
 # ======================
 if __name__ == "__main__":
     app.run(debug=True)
+
+@app.route("/student")
+def serve_student():
+    return send_from_directory(
+        os.path.join(os.getcwd(), "student"),
+        "index.html"
+    )
+
