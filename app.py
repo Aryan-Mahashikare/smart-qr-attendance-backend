@@ -42,7 +42,8 @@ def generate_qr():
     attendance.clear()
 
     # IMPORTANT: student URL (placeholder for now)
-    student_url = f"https://RENDER_URL/student?token={token}"
+    student_url = f"https://smart-qr-attendance-backend.onrender.com/student?token={token}"
+
 
     img = qrcode.make(student_url)
     buf = io.BytesIO()
