@@ -107,8 +107,8 @@ def health():
 @app.route("/student")
 def serve_student():
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    student_dir = os.path.join(base_dir, "..", "student")
-    return send_from_directory(student_dir, "index.html")
+    return send_from_directory(base_dir, "index.html")
+
 
 
 # ======================
