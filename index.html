@@ -275,6 +275,11 @@ function logout() {
     location.reload();
 }
 </script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/student/sw.js");
+}
+</script>
 
 </body>
 </html>
