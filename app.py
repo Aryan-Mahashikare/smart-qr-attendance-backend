@@ -21,7 +21,7 @@ current_qr = {
 attendance = set()
 
 # ======================
-# Helper
+# Helpers
 # ======================
 def is_expired():
     return time.time() > current_qr["expires_at"]
@@ -29,19 +29,19 @@ def is_expired():
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ======================
-# Routes
+# Health
 # ======================
-
 @app.route("/")
 def root():
     return "Smart QR Attendance Backend Running"
 
-@app.route("/health", methods=["GET"])
+@app.route("/health")
 def health():
     return jsonify({"status": "ok"})
 
-# ---------- TEACHER ----------
-
+# ======================
+# TEACHER APIs
+# ======================
 @app.route("/generate_qr", methods=["POST"])
 def generate_qr():
     data = request.json
@@ -67,11 +67,12 @@ def generate_qr():
     response.headers["Cache-Control"] = "no-store"
     return response
 
-@app.route("/attendance", methods=["GET"])
+@app.route("/attendance")
 def get_attendance():
+    # return sorted list for frontend ordering safety
     return jsonify(sorted(attendance))
 
-@app.route("/qr_status", methods=["GET"])
+@app.route("/qr_status")
 def qr_status():
     if not current_qr["token"]:
         return jsonify({"active": False})
@@ -83,12 +84,9 @@ def qr_status():
         "duration": current_qr["duration"]
     })
 
-# ---------- STUDENT ----------
-
-@app.route("/student")
-def serve_student():
-    return send_from_directory(BASE_DIR, "index.html")
-
+# ======================
+# STUDENT APIs
+# ======================
 @app.route("/mark_attendance", methods=["POST"])
 def mark_attendance():
     data = request.json
@@ -111,26 +109,39 @@ def mark_attendance():
         "cooldown": current_qr["duration"]
     })
 
-# ---------- PWA FILES ----------
+# ======================
+# FRONTEND ROUTES
+# ======================
 
+# Student web app
+@app.route("/student")
+def student_app():
+    return send_from_directory("frontend/student", "index.html")
+
+# Teacher web app
+@app.route("/teacher")
+def teacher_app():
+    return send_from_directory("frontend/teacher", "index.html")
+
+# PWA files (student)
 @app.route("/student/manifest.json")
-def manifest():
+def student_manifest():
     return send_from_directory(
-        BASE_DIR,
+        "frontend/student",
         "manifest.json",
         mimetype="application/manifest+json"
     )
 
 @app.route("/student/sw.js")
-def service_worker():
+def student_sw():
     return send_from_directory(
-        BASE_DIR,
+        "frontend/student",
         "sw.js",
         mimetype="application/javascript"
     )
 
 # ======================
-# Entry
+# ENTRY
 # ======================
 if __name__ == "__main__":
     app.run(debug=True)
