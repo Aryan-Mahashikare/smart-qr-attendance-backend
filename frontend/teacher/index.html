@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Teacher Panel</title>
+
+<style>
+*{box-sizing:border-box}
+
+:root{
+  --bg:#020617;
+  --panel:#0f172a;
+  --input:#1e293b;
+  --text:#e5e7eb;
+  --muted:#94a3b8;
+  --primary:#2563eb;
+  --danger:#dc2626;
+}
+
+html,body{
+  margin:0;
+  height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,sans-serif;
+}
+
+/* LOGIN */
+#loginScreen{
+  height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.loginBox{
+  background:var(--panel);
+  padding:32px;
+  border-radius:16px;
+  width:360px;
+}
+
+/* APP */
+#app{
+  display:none;
+  height:100vh;
+  padding:20px 32px;
+  display:grid;
+  grid-template-rows:auto 1fr;
+  gap:20px;
+}
+
+/* TOP BAR */
+.topBar{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  gap:16px;
+}
+
+label{
+  font-size:.8rem;
+  color:var(--muted);
+}
+
+input,select{
+  width:100%;
+  padding:14px;
+  border-radius:12px;
+  border:none;
+  background:var(--input);
+  color:var(--text);
+  font-size:1rem;
+}
+
+/* ACTION ROW */
+.actionRow{
+  display:flex;
+  gap:8px;
+  margin-top:6px;
+}
+.smallBtn{
+  flex:1;
+  padding:10px;
+  border-radius:10px;
+  border:none;
+  cursor:pointer;
+}
+.add{background:#334155;color:#fff}
+.del{background:var(--danger);color:#fff}
+
+/* MAIN */
+.main{
+  display:grid;
+  grid-template-columns:1.1fr .9fr;
+  gap:40px;
+  align-items:center;
+}
+
+/* QR */
+.qrBox{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+#qr{
+  width:260px;
+  height:260px;
+  display:none;
+}
+#timer{
+  margin-top:8px;
+  color:var(--danger);
+  font-weight:600;
+}
+
+/* ATTENDANCE */
+.attendance{
+  max-width:420px;
+}
+.attendance h3{
+  margin-bottom:10px;
+}
+.attendance ul{
+  list-style:none;
+  padding:0;
+}
+.attendance li{
+  background:var(--input);
+  padding:10px;
+  border-radius:10px;
+  margin-bottom:6px;
+}
+
+/* BUTTONS */
+button{
+  border:none;
+  border-radius:12px;
+  padding:12px 20px;
+  cursor:pointer;
+}
+.primary{background:var(--primary);color:white}
+
+/* LOGOUT */
+#logoutBtn{
+  position:fixed;
+  bottom:16px;
+  right:16px;
+  background:var(--danger);
+  color:white;
+  display:none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="loginBox">
+    <h2>Teacher Login</h2>
+    <input id="teacherName" placeholder="Enter teacher name">
+    <br><br>
+    <button class="primary" onclick="login()">Login</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- TOP BAR -->
+  <div class="topBar">
+    <div>
+      <label>Date</label>
+      <input type="date" id="date">
+    </div>
+
+    <div>
+      <label>Lecture Type</label>
+      <select id="lectureType"></select>
+    </div>
+
+    <div>
+      <label>Time Slot</label>
+      <select id="timeSlot"></select>
+    </div>
+
+    <div>
+      <label>Division</label>
+      <select id="division"></select>
+      <div class="actionRow">
+        <button class="smallBtn add" onclick="addDivision()">Add</button>
+        <button class="smallBtn del" onclick="deleteDivision()">Del</button>
+      </div>
+    </div>
+
+    <div>
+      <label>Course</label>
+      <select id="course"></select>
+      <div class="actionRow">
+        <button class="smallBtn add" onclick="addCourse()">Add</button>
+        <button class="smallBtn del" onclick="deleteCourse()">Del</button>
+      </div>
+    </div>
+
+    <!-- ✅ QR EXPIRY BACK -->
+    <div>
+      <label>QR Expiry</label>
+      <select id="qrExpiry">
+        <option value="30">30 sec</option>
+        <option value="45" selected>45 sec</option>
+        <option value="60">60 sec</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="qrBox">
+      <img id="qr">
+      <div id="timer"></div>
+      <br>
+      <button class="primary" onclick="generateQR()">Generate QR</button>
+    </div>
+
+    <div class="attendance">
+      <h3>Attendance</h3>
+      <ul id="attendance"></ul>
+    </div>
+  </div>
+</div>
+
+<button id="logoutBtn" onclick="logout()">Logout</button>
+
+<script>
+const API="https://smart-qr-attendance-backend.onrender.com";
+
+let teacher=null, poller=null, countdown=null;
+let qrActive=false;
+
+const teacherData=JSON.parse(localStorage.getItem("teacherData")||"{}");
+const attendanceStore=JSON.parse(localStorage.getItem("attendanceStore")||"{}");
+
+/* LOGIN */
+function login(){
+  teacher=teacherName.value.trim();
+  if(!teacher) return;
+
+  teacherData[teacher] ??= {};
+  localStorage.setItem("teacherData",JSON.stringify(teacherData));
+
+  loginScreen.style.display="none";
+  app.style.display="grid";
+  logoutBtn.style.display="block";
+
+  date.value=new Date().toISOString().split("T")[0];
+
+  lectureType.innerHTML="";
+  ["Theory","Practical"].forEach(v=>lectureType.add(new Option(v,v)));
+
+  updateTimeSlots();
+  loadDivisions();
+  bindChanges();
+}
+
+function logout(){ location.reload(); }
+
+/* CHANGE HANDLING */
+function bindChanges(){
+  ["date","lectureType","timeSlot","division","course"]
+    .forEach(id=>document.getElementById(id)
+    .addEventListener("change",onChange));
+}
+
+function onChange(){
+  stopPolling();
+  if(!qrActive) clearTimer();
+  renderAttendance();
+  if(this.id==="lectureType") updateTimeSlots();
+  if(this.id==="division") loadCourses();
+}
+
+/* TIME */
+function updateTimeSlots(){
+  timeSlot.innerHTML="";
+  const slots=lectureType.value==="Theory"
+    ?["9:15–10:15 AM","10:15–11:15 AM","11:30–12:30 PM","12:30–1:30 PM","2:15–3:15 PM","3:15–4:15 PM"]
+    :["9:15–11:15 AM","11:30–1:30 PM","2:15–4:15 PM"];
+  slots.forEach(s=>timeSlot.add(new Option(s,s)));
+}
+
+/* DIVISION / COURSE */
+function loadDivisions(){
+  division.innerHTML="";
+  Object.keys(teacherData[teacher]).forEach(d=>division.add(new Option(d,d)));
+  loadCourses();
+}
+function addDivision(){
+  const d=prompt("Division name");
+  if(!d) return;
+  teacherData[teacher][d]=[];
+  localStorage.setItem("teacherData",JSON.stringify(teacherData));
+  loadDivisions();
+}
+function deleteDivision(){
+  if(!division.value) return;
+  delete teacherData[teacher][division.value];
+  localStorage.setItem("teacherData",JSON.stringify(teacherData));
+  loadDivisions();
+}
+function loadCourses(){
+  course.innerHTML="";
+  teacherData[teacher][division.value]?.forEach(c=>course.add(new Option(c,c)));
+}
+function addCourse(){
+  if(!division.value) return;
+  const c=prompt("Course name");
+  if(!c) return;
+  teacherData[teacher][division.value].push(c);
+  localStorage.setItem("teacherData",JSON.stringify(teacherData));
+  loadCourses();
+}
+function deleteCourse(){
+  if(!course.value) return;
+  teacherData[teacher][division.value]=teacherData[teacher][division.value].filter(c=>c!==course.value);
+  localStorage.setItem("teacherData",JSON.stringify(teacherData));
+  loadCourses();
+}
+
+/* ATTENDANCE */
+function key(){
+  return `${teacher}|${date.value}|${lectureType.value}|${timeSlot.value}|${division.value}|${course.value}`;
+}
+function renderAttendance(){
+  attendance.innerHTML="";
+
+  const list = attendanceStore[key()];
+  if(!list) return;
+
+  // sort by roll number (ascending)
+  const sorted = [...list].sort((a, b) => {
+    const rollA = parseInt(a.match(/\((\d+)\)/)?.[1] || 0);
+    const rollB = parseInt(b.match(/\((\d+)\)/)?.[1] || 0);
+    return rollA - rollB;
+  });
+
+  sorted.forEach(n=>{
+    const li=document.createElement("li");
+    li.innerText=n;
+    attendance.appendChild(li);
+  });
+}
+
+
+/* QR */
+async function generateQR(){
+  if(!division.value||!course.value) return alert("Select division & course");
+
+  const duration = Number(qrExpiry.value);
+
+  const res=await fetch(API+"/generate_qr",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({duration})
+  });
+
+  qr.src=URL.createObjectURL(await res.blob());
+  qr.style.display="block";
+  qrActive=true;
+  startTimer(duration);
+  startPolling();
+}
+
+/* TIMER */
+function startTimer(s){
+  clearTimer();
+  timer.innerText=`QR expires in ${s}s`;
+  countdown=setInterval(()=>{
+    s--;
+    timer.innerText=s>0?`QR expires in ${s}s`:"QR expired";
+    if(s<=0){
+      clearTimer();
+      qrActive=false;
+    }
+  },1000);
+}
+function clearTimer(){
+  if(countdown) clearInterval(countdown);
+  countdown=null;
+  timer.innerText="";
+}
+
+/* POLLING */
+function startPolling(){
+  stopPolling();
+  poller=setInterval(fetchAttendance,2000);
+}
+function stopPolling(){
+  if(poller) clearInterval(poller);
+  poller=null;
+}
+async function fetchAttendance(){
+  const k=key();
+  const res=await fetch(API+"/attendance");
+  const list=await res.json();
+  attendanceStore[k]=list;
+  localStorage.setItem("attendanceStore",JSON.stringify(attendanceStore));
+  renderAttendance();
+}
+</script>
+
+</body>
+</html>
