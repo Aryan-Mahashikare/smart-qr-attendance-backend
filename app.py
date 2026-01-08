@@ -109,6 +109,14 @@ def serve_student():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     return send_from_directory(base_dir, "index.html")
 
+@app.route("/student/manifest.json")
+def manifest():
+    return send_from_directory(
+        os.path.dirname(os.path.abspath(__file__)),
+        "manifest.json",
+        mimetype="application/manifest+json"
+    )
+
 
 
 # ======================
