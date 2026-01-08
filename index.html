@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Smart QR Attendance</title>
 
+<!-- QR SCANNER LIBRARY -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+
 <style>
 * {
     box-sizing: border-box;
@@ -24,7 +27,7 @@ body {
 .app {
     width: 100%;
     max-width: 420px;
-    min-height: 90vh;
+    min-height: 100vh;
     background: #020617;
     padding: 24px;
     display: flex;
@@ -73,11 +76,6 @@ button {
     color: white;
 }
 
-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
 .status {
     margin-top: 16px;
     text-align: center;
@@ -88,6 +86,11 @@ button:disabled {
 .hidden {
     display: none;
 }
+
+#scanner {
+    width: 100%;
+    margin-top: 20px;
+}
 </style>
 </head>
 
@@ -95,7 +98,7 @@ button:disabled {
 
 <div class="app">
 
-    <!-- LOGIN -->
+    <!-- LOGIN SCREEN -->
     <div id="loginScreen">
         <h2>Student Login</h2>
         <input id="nameInput" placeholder="Enter your name">
@@ -103,16 +106,14 @@ button:disabled {
         <button class="primary" onclick="login()">Login</button>
     </div>
 
-    <!-- MAIN -->
+    <!-- MAIN SCREEN -->
     <div id="mainScreen" class="hidden">
         <h2 id="welcomeText"></h2>
 
         <button class="primary" onclick="scanQR()">Scan QR</button>
+        <button class="secondary" onclick="logout()">Logout</button>
 
-        <button id="logoutBtn" class="secondary" onclick="logout()">
-            Logout
-        </button>
-
+        <div id="scanner" class="hidden"></div>
         <div class="status" id="statusText"></div>
     </div>
 
@@ -122,8 +123,6 @@ button:disabled {
 const API = "https://smart-qr-attendance-backend.onrender.com";
 
 let user = JSON.parse(localStorage.getItem("user"));
-let cooldownEnd = localStorage.getItem("cooldownEnd");
-let timer = null;
 
 /* INIT */
 if (user) showMain();
@@ -138,7 +137,6 @@ function showMain() {
     loginScreen.classList.add("hidden");
     mainScreen.classList.remove("hidden");
     welcomeText.innerText = `Hello, ${user.name}`;
-    checkCooldown();
 }
 
 /* LOGIN */
@@ -156,82 +154,63 @@ function login() {
     showMain();
 }
 
-/* SCAN QR */
+/* QR SCAN */
 function scanQR() {
-    const token = new URLSearchParams(window.location.search).get("token");
-    if (!token) {
-        alert("Scan the QR using your phone camera");
-        return;
-    }
+    const scannerDiv = document.getElementById("scanner");
+    const statusText = document.getElementById("statusText");
 
+    scannerDiv.classList.remove("hidden");
+    statusText.innerText = "Scanning QR...";
+
+    const qr = new Html5Qrcode("scanner");
+
+    qr.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText) => {
+            qr.stop();
+            scannerDiv.classList.add("hidden");
+
+            const token = new URL(decodedText).searchParams.get("token");
+            if (!token) {
+                statusText.innerText = "Invalid QR code";
+                return;
+            }
+
+            markAttendance(token);
+        },
+        () => {}
+    );
+}
+
+/* MARK ATTENDANCE */
+function markAttendance(token) {
     fetch(`${API}/mark_attendance`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
-            name: `${user.name}: ${user.roll}`,
+            username: `${user.name} (${user.roll})`,
             token
         })
     })
     .then(res => res.json())
     .then(data => {
         if (data.error) {
-            alert(data.error);
-            return;
-        }
-
-        startCooldown(data.cooldown);
-        alert("Attendance marked successfully");
-    });
-}
-
-/* COOLDOWN LOGIC */
-function startCooldown(seconds) {
-    cooldownEnd = Date.now() + seconds * 1000;
-    localStorage.setItem("cooldownEnd", cooldownEnd);
-    checkCooldown();
-}
-
-function checkCooldown() {
-    clearInterval(timer);
-
-    const btn = logoutBtn;
-    const text = statusText;
-
-    if (!cooldownEnd || Date.now() > cooldownEnd) {
-        btn.disabled = false;
-        btn.innerText = "Logout";
-        text.innerText = "";
-        localStorage.removeItem("cooldownEnd");
-        return;
-    }
-
-    btn.disabled = true;
-
-    timer = setInterval(() => {
-        const remaining = Math.ceil((cooldownEnd - Date.now()) / 1000);
-
-        if (remaining <= 0) {
-            clearInterval(timer);
-            btn.disabled = false;
-            btn.innerText = "Logout";
-            text.innerText = "You can logout now";
-            localStorage.removeItem("cooldownEnd");
+            statusText.innerText = data.error;
         } else {
-            btn.innerText = `Logout (${remaining}s)`;
-            text.innerText = "Logout locked to prevent proxy attendance";
+            statusText.innerText = "✅ Attendance marked successfully";
         }
-    }, 1000);
+    })
+    .catch(() => {
+        statusText.innerText = "Network error";
+    });
 }
 
 /* LOGOUT */
 function logout() {
-    if (logoutBtn.disabled) return;
-
     if (!confirm("Logout?")) return;
-
     localStorage.removeItem("user");
-    localStorage.removeItem("cooldownEnd");
-    location.href = "/student";
+    location.reload();
 }
 </script>
 
